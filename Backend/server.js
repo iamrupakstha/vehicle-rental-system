@@ -12,7 +12,7 @@ import authRoutes from './routes/authRoutes.js';
 
 import vehicleRoutes from './routes/vehicleRoutes.js';
 
-// import bookingRoutes from './routes/bookingRoutes.js'
+import bookingRoutes from './routes/bookingRoutes.js'
 
 // import paymentRoutes from './routes/bookingRoutes.js'
 
@@ -29,10 +29,13 @@ app.use('/uploads', express.static('uploads'));
 //Use Routes
 //authentication (users)
 app.use('/api/auth', authRoutes);
+
 //vehicles
 app.use('/api/vehicles', vehicleRoutes);
+
 //bookings
-//app.use('/api/bookings', bookingRoutes);
+app.use('/api/bookings', bookingRoutes);
+
 //payments
 //app.use('/api/payments', paymentRoutes);
 

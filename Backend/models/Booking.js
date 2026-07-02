@@ -1,16 +1,17 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
+
 const bookingSchema = new mongoose.Schema(
   {
     //who booked
     customerId: {
-      type: moongose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true
     },
 
     //what they are booking
     vehicleId: {
-      type: moongose.Schema.Tyoes.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: 'Vehicle',
       required: true
     },
@@ -72,7 +73,7 @@ const bookingSchema = new mongoose.Schema(
 
     //extra info
     notes: {
-      typeString,
+      type: String,
       trim: true
     }
   },
@@ -120,4 +121,4 @@ this.discountAmount = (this.subtotal * discountPercentage) / 100;
 this.totalAmount = this.subtotal - this.discountAmount; 
 };
 
-export default moongose.model('Booking', bookingSchema);
+export default mongoose.model('Booking', bookingSchema);
