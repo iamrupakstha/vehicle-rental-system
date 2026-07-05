@@ -36,7 +36,8 @@ const bookingSchema = new mongoose.Schema(
     },
     subtotal: {
       type: Number,
-      required: true
+      required: true,
+      default: 0
     },
 
     //discount
@@ -50,7 +51,8 @@ const bookingSchema = new mongoose.Schema(
     },
     totalAmount: {
       type: Number,
-      required: true
+      required: true,
+      default: 0
     },
 
     //Status

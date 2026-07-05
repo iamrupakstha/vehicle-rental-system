@@ -14,7 +14,7 @@ import vehicleRoutes from './routes/vehicleRoutes.js';
 
 import bookingRoutes from './routes/bookingRoutes.js'
 
-// import paymentRoutes from './routes/bookingRoutes.js'
+import paymentRoutes from './routes/bookingRoutes.js'
 
 
 dotenv.config();
@@ -37,7 +37,7 @@ app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/bookings', bookingRoutes);
 
 //payments
-//app.use('/api/payments', paymentRoutes);
+app.use('/api/payments', paymentRoutes);
 
 
 
