@@ -12,8 +12,6 @@ export const registerUser = async (req, res) => {
     if(userExists) {
       return res.status(400).json({message: "User already exists!"});
     }
-
-
     // hash value of password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -106,25 +104,6 @@ export const currentUser = async(req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error'
-    });
-  }
-};
-
-//get all users
-export const getAllUsers = async(req, res) => {
-  try{
-    const users = await User.find().select('-password');
-
-    res.json({
-      success: true,
-      count: users.length,
-      users
-    });
-
-  }catch(error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error!'
     });
   }
 };

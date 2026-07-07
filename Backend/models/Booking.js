@@ -25,14 +25,15 @@ const bookingSchema = new mongoose.Schema(
       type: Date,
       required: true
     },
-    //pricing
-    pricePerDay: {
-      type: Number,
-      required: true
-    },
     totalDays: {
       type: Number,
       required: true
+    },
+    //pricing
+    pricePerDay: {
+      type: Number,
+      required: true,
+      default: 0
     },
     subtotal: {
       type: Number,
@@ -52,7 +53,6 @@ const bookingSchema = new mongoose.Schema(
     totalAmount: {
       type: Number,
       required: true,
-      default: 0
     },
 
     //Status
@@ -64,7 +64,7 @@ const bookingSchema = new mongoose.Schema(
     //payment
     paymentStatus:{
       type: String,
-      enum: ['pending', 'paid'],
+      enum: ['pending', 'verification', 'paid', 'failed'],
       default: 'pending'
     },
     paymentMethod: {
@@ -72,11 +72,46 @@ const bookingSchema = new mongoose.Schema(
       enum: ['online', 'cash'],
       required: true
     },
-
+    paymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Payment'
+    },
+    
+    //screenshot (for online)
+    screenshot: {
+      type: String,
+      dafault: null
+    },
+    screenshotUploadedAt: {
+      type: Date
+    },
+    // Location
+    pickupLocation: {
+      type: String,
+      trim: true
+    },
+    returnLocation: {
+      type: String,
+      trim: true
+    },
     //extra info
     notes: {
       type: String,
-      trim: true
+      trim: true,
+      maxlength: 500
+    },
+    // Timestamps for tracking
+    confirmedAt: {
+      type: Date
+    },
+    completedAt: {
+      type: Date
+    },
+    cancelledAt: {
+      type: Date
+    },
+    paymentVerifiedAt: {
+      type: Date
     }
   },
   {
@@ -98,29 +133,27 @@ bookingSchema.statics.isVehicleAvailable = async function(vehicleId, startDate, 
   return !existingBooking;
 }
 
-//calculate discount
-bookingSchema.methods.calculateDiscount = function() {
+// Calculate booking price with discount
+bookingSchema.methods.calculatePrice = function() {
   const days = this.totalDays;
-
-  //default no discount
+  const subtotal = days * this.pricePerDay;
+  
   let discountPercentage = 0;
-
-
-  // Apply discount based on days
-  if (days >= 30) {
-    discountPercentage = 20; // 20% for 30+ days
-  } else if (days >= 14) {
-    discountPercentage = 15; // 15% for 14-29 days
-  } else if (days >= 7) {
-    discountPercentage = 10; // 10% for 7-13 days
-  } else if (days >= 3) {
-    discountPercentage = 5;  // 5% for 3-6 days
-  }
-//calculate amounts
-this.subtotal = days * this.pricePerDay;
-this.discountPercentage = discountPercentage;
-this.discountAmount = (this.subtotal * discountPercentage) / 100;
-this.totalAmount = this.subtotal - this.discountAmount; 
+  if (days >= 30) discountPercentage = 20;
+  else if (days >= 14) discountPercentage = 15;
+  else if (days >= 7) discountPercentage = 10;
+  else if (days >= 3) discountPercentage = 5;
+  
+  const discountAmount = (subtotal * discountPercentage) / 100;
+  
+  this.subtotal = subtotal;
+  this.discountPercentage = discountPercentage;
+  this.discountAmount = discountAmount;
+  this.totalAmount = subtotal - discountAmount;
 };
+//index
+bookingSchema.index({ customerId: 1, status: 1 });
+bookingSchema.index({ vehicleId: 1, startDate: 1, endDate: 1 });
+bookingSchema.index({ status: 1, paymentStatus: 1 });
 
 export default mongoose.model('Booking', bookingSchema);

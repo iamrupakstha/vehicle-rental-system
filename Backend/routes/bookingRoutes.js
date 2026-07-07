@@ -4,11 +4,12 @@ import {
   getMyBookings,
   getBookingById,
   cancelBooking,
-  getAllBookings,
-  updateBookingStatus,
-  getBookingStats
+  uploadPaymentScreenshot
+  
   } from "../controllers/bookingController.js";
   import { protect, adminOnly } from "../middleware/authMiddleware.js";
+  import upload from '../middleware/upload.js';
+
 
   const router = epress.Router();
 
@@ -20,11 +21,9 @@ import {
   router.get('/:id',protect, getBookingById);
   router.put('/:id/cancel',protect, cancelBooking);
 
+  //upload screenshot for online payment
+  router.post('/:bookingId/screenshot', protect, upload.single('screenshot'), uploadPaymentScreenshot);
 
-  //admin only
-  router.get('/', protect, adminOnly, getAllBookings);
-  router.put('/:id/status', protect, adminOnly, updateBookingStatus);
-router.get('/stats/overview', protect, adminOnly, getBookingStats);
 
   export default router;
   

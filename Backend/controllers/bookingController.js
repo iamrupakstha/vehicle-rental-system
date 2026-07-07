@@ -4,8 +4,16 @@ import Vehicle from "../models/Vehicle.js";
 //create booking
 export const createBooking = async (req, res) => {
   try {
-    //get data from request body
-    const {vehicleId, startDate, endDate, paymentMethod, notes} = req.body;
+    const {
+      vehicleId,
+      startDate,
+      endDate,
+      paymentMethod,
+      pickupLocation,
+      returnLocation,
+      notes
+    } = req.body;
+
     const customerId = req.user._id;
 
     // Validate required fields
@@ -23,93 +31,197 @@ export const createBooking = async (req, res) => {
       });
     }
 
-    if(!paymentMethod) {
+    if (!paymentMethod) {
       return res.status(400).json({
         success: false,
         message: 'paymentMethod is required'
       });
     }
-  
-    //check if vehicle exists
+
+    // ✅ Check if vehicle exists - WITH return
     const vehicle = await Vehicle.findById(vehicleId);
-    if(!vehicle) {
-      res.status(404).json({
+    if (!vehicle) {
+      return res.status(404).json({  // ← RETURN added!
         success: false,
         message: "Vehicle not found"
       });
     }
-    //check if vehicle is available for booking
-    if(vehicle.status !== 'available') {
+
+    // Now vehicle is guaranteed to exist
+    // Check if vehicle is available
+    if (vehicle.status !== 'available') {
       return res.status(400).json({
         success: false,
-        message: `Vehicle is currently ${vehicle.status}. Please Select another vehicle or try again later.`
+        message: `Vehicle is currently ${vehicle.status}. Please select another vehicle.`
       });
     }
 
-    //validate booking dates
+    // Validate dates
     const start = new Date(startDate);
     const end = new Date(endDate);
     const today = new Date();
-    if(start < today || end <= today) {
+
+    if (start < today || end <= today) {
       return res.status(400).json({
         success: false,
         message: "Booking dates cannot be in the past"
       });
     }
-    //check if vehicle is available for the given dates
-    const isAvailable = await Booking.isVehicleAvailable(vehicleId, startDate, endDate);
 
-    if(!isAvailable) {
+    // Check availability
+    const isAvailable = await Booking.isVehicleAvailable(vehicleId, startDate, endDate);
+    if (!isAvailable) {
       return res.status(400).json({
         success: false,
         message: "Vehicle is not available for the selected dates"
       });
     }
 
-    //calculate days and price
+    // Calculate days and price
     const diffTime = Math.abs(end - start);
     const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const pricePerDay = vehicle.pricePerDay;
-    
+    const pricePerDay = vehicle.pricePerDay;  // ✅ Now vehicle is defined
 
-    // create booking
-    const booking = await Booking.create({
+    // Calculate discount
+    const subtotal = totalDays * pricePerDay;
+    let discountPercentage = 0;
+    if (totalDays >= 30) discountPercentage = 20;
+    else if (totalDays >= 14) discountPercentage = 15;
+    else if (totalDays >= 7) discountPercentage = 10;
+    else if (totalDays >= 3) discountPercentage = 5;
+    
+    const discountAmount = (subtotal * discountPercentage) / 100;
+    const totalAmount = subtotal - discountAmount;
+
+    // Create booking
+    const booking = new Booking({
       customerId,
       vehicleId,
       startDate: start,
       endDate: end,
       totalDays,
       pricePerDay,
+      subtotal,
+      discountPercentage,
+      discountAmount,
+      totalAmount,
       paymentMethod,
+      pickupLocation: pickupLocation || 'Pickup at store',
+      returnLocation: returnLocation || 'Return at store',
       notes: notes || '',
       status: 'pending',
-      paymentStatus: 'pending'
+      paymentStatus: paymentMethod === 'online' ? 'verification' : 'pending',
+      screenshot: null
     });
 
-    //Calculate discount
-    booking.calculateDiscount();
-
-    //save booking
+    // Save booking
     await booking.save();
 
-    //populate vehicle and customer details
-    await booking.populate('customerId', 'Name email phone');
-    await booking.populate('vehicleId', 'make model year');
+    // Populate
+    await booking.populate('customerId', 'name email phone');
+    await booking.populate('vehicleId', 'name brand model pricePerDay image');
 
-    //res
+    // Response
+    const responseData = {
+      booking,
+      paymentMethod: paymentMethod,
+      totalAmount: totalAmount,
+      message: paymentMethod === 'online' 
+        ? 'Booking created! Please complete online payment and upload screenshot.' 
+        : 'Booking created! Please pay cash at pickup.'
+    };
+
+    if (paymentMethod === 'online') {
+      responseData.qrInfo = {
+        amount: totalAmount,
+        instructions: 'Scan QR code to pay via eSewa, Khalti, or bank transfer'
+      };
+    }
+
     res.status(201).json({
       success: true,
-      message: "Booking created successfully",
-      booking
+      message: "Booking created successfully 🎉",
+      data: responseData
     });
 
-  } catch(error) {
+  } catch (error) {
+    console.error('Create booking error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+//upload screenshots
+export const uploadPaymentScreenshot = async (req, res) => {
+  try {
+    const bookingId = req.params.bookingId;
+    const customerId = req.user._id;
+
+    //find booking 
+    const booking = await Booking.findById(bookingId);
+    if(!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+    //check ownership
+    if(booking.customerId.toString() !== customerId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized'
+      });
+    }
+    //check online payment
+    if(booking.paymentMethod !== 'online') {
+      return res.status(400).json({
+        success: false,
+        message: 'This booking does not require screenshot upload'
+      });
+    }
+      // Check if already uploaded
+    if (booking.screenshot) {
+      return res.status(400).json({
+        success: false,
+        message: 'Screenshot already uploaded'
+      });
+    }
+
+    // Check file
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select a screenshot to upload'
+      });
+    }
+
+    //upload booking with screenshot
+    booking.screenshot = req.file.filename;
+    booking.screenshotUploadedAt = new Date();
+    booking.paymentStatus = 'verification';
+
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Screenshot uploaded successfully! Admin will verify shortly. 📸',
+      data: {
+        bookingId: booking._id,
+        screenshot: booking.screenshot,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus
+      }
+    });
+
+  } catch (error) {
     res.status(500).json({
       success: false,
       message: error.message
     });
   }
 }
+
 
 //get my bookings
 export const getMyBookings = async(req, res) => {
@@ -218,116 +330,3 @@ export const cancelBooking = async(req, res) => {
   }
 };
 
-//admin get all bookings
-export const getAllBookings = async(req, res) => {
-  try{
-    const {status, page = 1, limit = 10} = req.query;
-
-    const filter = {};
-    if(status) filter.status = status;
-
-    const skip = (page - 1) * limit;
-
-    const bookings = await Booking.find(filter)
-    .populate('customerId', 'name email phone')
-    .populate('vehicleId', 'name brand model pricePerDay image')
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(Number(limit));
-
-    const total = await Booking.countDocuments(filter);
-
-    res.status(200).json({
-      success: true,
-      count: bookings.length,
-      total,
-      page: Number(page),
-      totalPages: Math.ceil(total / limit),
-      bookings
-    })
-
-  }catch(error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-} 
-
-//update booking status
-export const updateBookingStatus = async(req, res) => {
-  try {
-    const {status} = req.body;
-    if(!status) {
-      return res.status(400).json({
-        success: false,
-        message: "Status is required"
-      });
-    }
-
-    const validateStatus = ['pending', 'confirmed', 'completed', 'cancelled'];
-    if(!validateStatus.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid status value"
-      });
-    }
-
-    const booking = await Booking.findById(req.params.id);
-    if(!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found"
-      });
-    }
-
-    booking.status = status;
-    await booking.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Booking status updated successfully"
-    });
-
-  } catch(error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
-
-
-//get booking stats
-export const getBookingStats = async(req, res) => {
-  try{
-    const totalBookings = await Booking.countDocuments();
-    const pendingBookings = await Booking.countDocuments({status: 'pending'});
-    const confirmedBookings = await Booking.countDocuments({status: 'confirmed'});
-    const completedBookings = await Booking.countDocuments({status: 'completed'});
-    const cancelledBookings = await Booking.countDocuments({status: 'cancelled'});
-
-    const renenueStats = await Booking.aggregate([
-      { $match: {status: { $in: ['confirmed', 'completed']}}},
-      {$group: {_id: null, totalRevenue: {$sum: "$totalAmount"}}}
-    ]);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        totalBookings,
-        pendingBookings,
-        confirmedBookings,
-        completedBookings,
-        cancelledBookings,
-        totalRevenue: renenueStats[0]?.totalRevenue || 0
-      }
-    })
-
-  } catch(error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  } 
-}

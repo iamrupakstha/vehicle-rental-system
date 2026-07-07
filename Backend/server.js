@@ -14,7 +14,10 @@ import vehicleRoutes from './routes/vehicleRoutes.js';
 
 import bookingRoutes from './routes/bookingRoutes.js'
 
-import paymentRoutes from './routes/bookingRoutes.js'
+import adminRoutes from './routes/adminRoutes.js'
+
+import { startBookingScheduler } from './services/bookingScheduler.js';
+
 
 
 dotenv.config();
@@ -25,7 +28,8 @@ app.use(express.json());
 app.use(cors());
 // image of vehicles
 app.use('/uploads', express.static('uploads'));
-
+//automatically update status of vehicle and booking
+startBookingScheduler();
 //Use Routes
 //authentication (users)
 app.use('/api/auth', authRoutes);
@@ -36,8 +40,9 @@ app.use('/api/vehicles', vehicleRoutes);
 //bookings
 app.use('/api/bookings', bookingRoutes);
 
-//payments
-app.use('/api/payments', paymentRoutes);
+//admin overviews
+app.use('/admin', adminRoutes)
+
 
 
 
