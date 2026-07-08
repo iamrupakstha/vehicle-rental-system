@@ -5,10 +5,11 @@ import {
 
   //users
   getAllUsers,
+  updateUserRole,
+  deleteUser,
 
   //vehicles
   createVehicle,
-  getAllVehicles,
   updateVehicle,
   deleteVehicle,
   getVehicleStats,
@@ -35,14 +36,15 @@ router.get('/reports/revenue', getRevenueReport);
 
 //users management
 router.get('/users', getAllUsers )
+router.put('/users/:id/role', updateUserRole);
+router.delete('/users/:id', deleteUser);
 
 
 //vehicles management
 router.post('/create-vehicles', createVehicle)
-router.get('vehicles', getAllVehicles);
+router.get('/vehicles/stats', getVehicleStats);
 router.put('/vehicles/:id/update', updateVehicle);
 router.delete('/vehicles/:id/delete', deleteVehicle);
-router.get('/vehicles/stats', getVehicleStats);
 router.get('/vehicles/:id/reviews', getVehicleReviews)
 
 //bookings managment

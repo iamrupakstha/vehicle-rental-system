@@ -41,7 +41,7 @@ app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/bookings', bookingRoutes);
 
 //admin overviews
-app.use('/admin', adminRoutes)
+app.use('/api/admin', adminRoutes)
 
 
 

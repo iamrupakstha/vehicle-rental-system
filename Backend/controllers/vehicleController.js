@@ -1,29 +1,6 @@
 import Vehicle from "../models/Vehicle.js";
 
 
-// create vehicles
-export const createVehicle = async (req, res) => {
-  try{
-    const vehicleData = req.body;
-
-    if(!vehicleData.pricePerWeek && vehicleData.pricePerDay) {
-      vehicleData.pricePerWeek = vehicleData.pricePerDay * 5;
-    }
-
-    if(req.file) {
-      vehicleData.image = req.file.filename;
-    }
-
-    const vehicle = await Vehicle.create(vehicleData);
-    res.status(201).json({
-      success: true,
-      message: 'Vehicle created successfully',
-      data: vehicle
-    });
-  } catch(error) {
-    res.status(500).json({message: error.message});
-  }
-};
 
 //get all vehicle
 export const getAllVehicles = async(req, res) => {

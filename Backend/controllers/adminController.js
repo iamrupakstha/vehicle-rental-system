@@ -9,9 +9,8 @@ export const getDashboardStats = async(req, res) => {
     //get all counts
     const totalUsers = await User.countDocuments();
     const totalVehicles = await Vehicle.countDocuments();
-    const totalBookings = await Bookings.countDocuments();
+    const totalBookings = await Booking.countDocuments();
     
-
     //vehicle status breakdown
     const availableVehicles = await Vehicle.countDocuments({status: 'available'});
     const rentedVehicles = await Vehicle.countDocuments({status: 'rented'});
@@ -29,7 +28,6 @@ export const getDashboardStats = async(req, res) => {
     const paidPayments = await Booking.countDocuments({ paymentStatus: 'paid' });
     const failedPayments = await Booking.countDocuments({ paymentStatus: 'failed' });
 
-
     //total revenue from confirmed and completed bookings
     const revenueResult = await Booking.aggregate([
       {
@@ -40,13 +38,12 @@ export const getDashboardStats = async(req, res) => {
       },
       {
         $group: { //group is used to group and calculate
-          _id: null, total: { $sum: $totalAmount}
+          _id: null, total: { $sum: '$totalAmount'}
         }
       }
     ]);
     const totalRevenue = revenueResult[0]?.total || 0;
     
-
     //monthly revenue
     const monthlyRevenue = await Booking.aggregate([
       {
@@ -101,7 +98,6 @@ export const getDashboardStats = async(req, res) => {
         count: { $sum: 1}
       }}
     ])
-
 
     res.json({
       success: true,
@@ -160,16 +156,112 @@ export const getAllUsers = async(req, res) => {
     res.json({
       success: true,
       count: users.length,
-      users
+      data: users
     });
 
   }catch(error) {
     res.status(500).json({
       success: false,
-      message: 'Server error!'
+      message: error.message
     });
   }
 };
+//updage userRoles
+export const updateUserRole = async(req, res) => {
+  try{
+    const {role} = req.body;
+    const userId = req.params.id;
+
+    //validate role
+    if(!role){
+      return res.status(400).json({
+        success: false,
+        message: "Role is required."
+      })
+    };
+    if(!['admin', 'customer'].includes(role)){
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role. Must be admin or customer'
+      })
+    }
+    //prevent changing own role
+    if(userId === req.user._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot change your own role'
+      })
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {role},
+      {
+        new: true,
+        runValidators: true
+      }
+    ).select('-password');
+
+    if(!user) {
+       return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `User role updated to ${role} successfully!`,
+      data: user
+    });
+    
+  }catch (error){
+     res.status(500).json({
+      success: false,
+      message: error.message
+      
+    });
+  }
+
+}
+
+//delete users
+export const deleteUser = async (req, res) => {
+  try{
+    const userId = req.params.id;
+
+    //prevent detecting yourself
+    if(userId === req.user._id.toString()){
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete your own account'
+      });
+    }
+    const user = await User.findByIdAndDelete(userId);
+    if(!user) {
+       return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "User deleted successfully!",
+      data: {
+        id: userId,
+        name: user.name,
+        email: user.email
+      }
+    });
+  }
+  catch (error){
+     res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+}
 
 //Vehilces management
 // create vehicles
@@ -194,75 +286,6 @@ export const createVehicle = async (req, res) => {
   } catch(error) {
     res.status(500).json({message: error.message});
   }
-};
-
-//get all vehicle
-export const getAllVehicles = async(req, res) => {
-  try{
-    const {
-      type,
-      brand, 
-      status,
-      minPrice,
-      maxPrice,
-      search, 
-      sortBy = 'createdAt',
-      sortOrder = 'desc',
-      page = 1,
-      limit = 10
-    } = req.query;
-    //filter
-    const filter = {};
-
-    if(type) filter.type = type;
-    if(brand) filter.brand = {$regex: brand, $options: 'i'};
-    if(status) filter.status = status;
-
-    //price range filter
-    if(minPrice || maxPrice) {
-      filter.pricePerDay = {};
-      if(minPrice) filter.pricePerDay.$gte = Number(minPrice);
-      if(maxPrice) filter.pricePerDay.$lte = Number(maxPrice);
-    }
-
-    //search
-    if(search) {
-      filter.$or = [
-        {name: { $regex: search, $options: 'i'}},
-        {brand: {$regex: search, $options: 'i'}},
-        { model: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
-      ];
-    }
-
-    const skip = (page - 1) * limit;
-
-    //sort
-    const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1};
-
-    //get vehicles
-    const vehicles = await Vehicle.find(filter) 
-    .sort(sort)
-    .skip(skip)
-    .limit(Number(limit));
-
-    //get total count
-    const total = await Vehicle.countDocuments(filter);
-
-    res.json({
-      success: true,
-      count: vehicles.length,
-      total,
-      totalPages: Math.ceil(total / limit),
-      currentPage: Number(page),
-      data: vehicles
-    })
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-}
 };
 
 // Update vehicles
@@ -380,7 +403,7 @@ export const getVehicleStats = async (req, res) => {
 //get vehicle review
 export const getVehicleReviews = async (req, res) => {
   try {
-    const vehicle = await Vehicle.findById(req.params.id).select('Name rating reviews');
+    const vehicle = await Vehicle.findById(req.params.id).select('name rating reviews');
 
     if(!vehicle) {
       return res.status(404).json({
@@ -600,22 +623,21 @@ export const getAllPayments = async (req, res) => {
     const bookings = await Booking.find(filter)
     .populate('customerId', 'name email phone')
     .populate('vehicleId', 'name brand model pricePerDay')
-    .select('customerId vehicleId totalAmount paymentMethod paymentStatus screenshot notes createdAt')
+    .select('customerId vehicleId totalAmount paymentMethod paymentStatus screenshot notes createdAt paymentVerifiedAt verifiedBy')
     .sort({createdAt: -1})
     .skip(skip)
     .limit(Number(limit));
 
     const total = await Booking.countDocuments(filter);
 
-
     //transform to payment
-    const payments = bookings.map(bookings => ({
-      _id: Booking._id,
-      bookingId: Booking._id,
-      customerId: customerId,
-      vehicleId: vehicleId,
-      amount: booking.$totalAmount,
-      method: booking.paymentMethods,
+    const payments = bookings.map(booking => ({
+      _id: booking._id,
+      bookingId: booking._id,
+      customerId: booking.customerId,
+      vehicleId: booking.vehicleId,
+      amount: booking.totalAmount,
+      method: booking.paymentMethod,
       status: booking.paymentStatus,
       screenshot: booking.screenshot,
       notes: booking.notes,
@@ -632,7 +654,6 @@ export const getAllPayments = async (req, res) => {
       currentPage: Number(page),
       data: payments
     })
-
   } catch(error) {
     res.status(400).json({
       success: false,
@@ -656,12 +677,12 @@ export const getRevenueReport = async (req, res) => {
     } else if (period === 'weekly') {
       dateFormat = {
         year: {$year: '$createdAt'},
-        week: { $week: 'createdAt'}
+        week: { $week: '$createdAt'}
       };
     } else {
       dateFormat = {
         year: {$year: '$createdAt'},
-        month: { $month: 'createdAt'}
+        month: { $month: '$createdAt'}
       };
   }
 
